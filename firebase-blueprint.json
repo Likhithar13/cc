@@ -1,0 +1,307 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authorized blood bank administrator or staff account profile and RBAC role assignment.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "minLength": 3, "maxLength": 160 },
+        "displayName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "role": { "type": "string", "enum": ["admin", "staff"] },
+        "status": { "type": "string", "enum": ["active", "pending", "disabled"] },
+        "department": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "phone": { "type": "string", "minLength": 0, "maxLength": 30 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "role", "status", "department", "createdAt", "updatedAt"]
+    },
+    "Donor": {
+      "title": "Donor",
+      "description": "Registered blood donor record with PII strictly restricted to authorized blood bank personnel.",
+      "type": "object",
+      "properties": {
+        "donorCode": { "type": "string", "minLength": 3, "maxLength": 32, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "fullName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "contactNumber": { "type": "string", "minLength": 7, "maxLength": 25 },
+        "email": { "type": "string", "format": "email", "minLength": 3, "maxLength": 160 },
+        "age": { "type": "integer" },
+        "bloodGroup": { "type": "string", "enum": ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] },
+        "address": { "type": "string", "minLength": 3, "maxLength": 300 },
+        "lastDonationDate": { "type": "string", "maxLength": 20 },
+        "availabilityStatus": { "type": "string", "enum": ["available", "deferred", "inactive"] },
+        "registrationDate": { "type": "string", "minLength": 8, "maxLength": 20 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "donorCode",
+        "fullName",
+        "contactNumber",
+        "email",
+        "age",
+        "bloodGroup",
+        "address",
+        "lastDonationDate",
+        "availabilityStatus",
+        "registrationDate",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "BloodInventoryBatch": {
+      "title": "BloodInventoryBatch",
+      "description": "Traceable blood unit batch with collection date, expiry date, component type, and quarantine controls.",
+      "type": "object",
+      "properties": {
+        "batchCode": { "type": "string", "minLength": 3, "maxLength": 40, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "bloodGroup": { "type": "string", "enum": ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] },
+        "component": { "type": "string", "enum": ["Whole Blood", "Red Blood Cells", "Platelets", "Fresh Frozen Plasma", "Cryoprecipitate"] },
+        "unitsAvailable": { "type": "integer" },
+        "initialUnits": { "type": "integer" },
+        "collectionDate": { "type": "string", "minLength": 8, "maxLength": 20 },
+        "expiryDate": { "type": "string", "minLength": 8, "maxLength": 20 },
+        "storageLocation": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "status": { "type": "string", "enum": ["available", "quarantined", "expired", "depleted"] },
+        "quarantineReason": { "type": "string", "maxLength": 240 },
+        "donorId": { "type": "string", "maxLength": 128 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "batchCode",
+        "bloodGroup",
+        "component",
+        "unitsAvailable",
+        "initialUnits",
+        "collectionDate",
+        "expiryDate",
+        "storageLocation",
+        "status",
+        "quarantineReason",
+        "donorId",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "BloodTransaction": {
+      "title": "BloodTransaction",
+      "description": "Immutable ledger record of every inventory stock addition, fulfillment usage, quarantine, or expiry write-off.",
+      "type": "object",
+      "properties": {
+        "transactionType": { "type": "string", "enum": ["addition", "usage", "quarantine", "expiry_writeoff", "adjustment"] },
+        "bloodGroup": { "type": "string", "enum": ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] },
+        "component": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "unitsDelta": { "type": "integer" },
+        "unitsAfter": { "type": "integer" },
+        "inventoryBatchId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "referenceType": { "type": "string", "enum": ["donation", "request", "manual", "quarantine"] },
+        "referenceId": { "type": "string", "maxLength": 128 },
+        "notes": { "type": "string", "maxLength": 400 },
+        "performedBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "performedByName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "transactionType",
+        "bloodGroup",
+        "component",
+        "unitsDelta",
+        "unitsAfter",
+        "inventoryBatchId",
+        "referenceType",
+        "referenceId",
+        "notes",
+        "performedBy",
+        "performedByName",
+        "createdAt"
+      ]
+    },
+    "BloodRequest": {
+      "title": "BloodRequest",
+      "description": "Hospital or clinical requester blood order with workflow status tracking.",
+      "type": "object",
+      "properties": {
+        "requestCode": { "type": "string", "minLength": 3, "maxLength": 32, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "hospitalOrRequesterName": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "requiredBloodGroup": { "type": "string", "enum": ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] },
+        "component": { "type": "string", "enum": ["Whole Blood", "Red Blood Cells", "Platelets", "Fresh Frozen Plasma", "Cryoprecipitate"] },
+        "unitsRequested": { "type": "integer" },
+        "urgency": { "type": "string", "enum": ["routine", "urgent", "emergency"] },
+        "requestDate": { "type": "string", "minLength": 8, "maxLength": 20 },
+        "requiredDate": { "type": "string", "minLength": 8, "maxLength": 20 },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "fulfilled"] },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "reviewedBy": { "type": "string", "maxLength": 128 },
+        "reviewedByName": { "type": "string", "maxLength": 100 },
+        "fulfilledAt": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "requestCode",
+        "hospitalOrRequesterName",
+        "requiredBloodGroup",
+        "component",
+        "unitsRequested",
+        "urgency",
+        "requestDate",
+        "requiredDate",
+        "status",
+        "notes",
+        "createdBy",
+        "reviewedBy",
+        "reviewedByName",
+        "fulfilledAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Donation": {
+      "title": "Donation",
+      "description": "Authorized blood donation record linked to an existing donor and inventory batch.",
+      "type": "object",
+      "properties": {
+        "donationCode": { "type": "string", "minLength": 3, "maxLength": 32, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "donorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "donorCode": { "type": "string", "minLength": 3, "maxLength": 32 },
+        "donorName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "bloodGroup": { "type": "string", "enum": ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] },
+        "component": { "type": "string", "enum": ["Whole Blood", "Red Blood Cells", "Platelets", "Fresh Frozen Plasma", "Cryoprecipitate"] },
+        "donationDate": { "type": "string", "minLength": 8, "maxLength": 20 },
+        "unitsCollected": { "type": "integer" },
+        "inventoryBatchId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "notes": { "type": "string", "maxLength": 400 },
+        "recordedBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "donationCode",
+        "donorId",
+        "donorCode",
+        "donorName",
+        "bloodGroup",
+        "component",
+        "donationDate",
+        "unitsCollected",
+        "inventoryBatchId",
+        "notes",
+        "recordedBy",
+        "createdAt"
+      ]
+    },
+    "AiReport": {
+      "title": "AiReport",
+      "description": "Saved Gemini AI administrative inventory report generated exclusively from anonymized stock metrics.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "reportType": { "type": "string", "enum": ["inventory_analysis", "full_report", "recruitment_plan"] },
+        "totalAvailableUnits": { "type": "integer" },
+        "nearExpiryUnits": { "type": "integer" },
+        "expiredUnits": { "type": "integer" },
+        "quarantinedUnits": { "type": "integer" },
+        "lowStockGroups": { "type": "array" },
+        "summaryText": { "type": "string", "minLength": 10, "maxLength": 12000 },
+        "recommendations": { "type": "array" },
+        "safetyDisclaimer": { "type": "string", "minLength": 10, "maxLength": 300 },
+        "lowStockMaxThreshold": { "type": "integer" },
+        "moderateStockMaxThreshold": { "type": "integer" },
+        "generatedBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "generatedByName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "title",
+        "reportType",
+        "totalAvailableUnits",
+        "nearExpiryUnits",
+        "expiredUnits",
+        "quarantinedUnits",
+        "lowStockGroups",
+        "summaryText",
+        "recommendations",
+        "safetyDisclaimer",
+        "lowStockMaxThreshold",
+        "moderateStockMaxThreshold",
+        "generatedBy",
+        "generatedByName",
+        "createdAt"
+      ]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Audit trail entry for authentication, donor, inventory, request, donation, AI, and system actions.",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "category": { "type": "string", "enum": ["auth", "donor", "inventory", "request", "donation", "ai", "settings", "users"] },
+        "description": { "type": "string", "minLength": 3, "maxLength": 400 },
+        "entityId": { "type": "string", "maxLength": 128 },
+        "actorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "actorRole": { "type": "string", "enum": ["admin", "staff"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["action", "category", "description", "entityId", "actorUid", "actorName", "actorRole", "createdAt"]
+    },
+    "SystemSettings": {
+      "title": "SystemSettings",
+      "description": "Configurable illustrative stock threshold and expiry alert settings managed by administrators.",
+      "type": "object",
+      "properties": {
+        "lowStockMax": { "type": "integer" },
+        "moderateStockMax": { "type": "integer" },
+        "nearExpiryDays": { "type": "integer" },
+        "thresholdNotice": { "type": "string", "minLength": 10, "maxLength": 300 },
+        "updatedBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["lowStockMax", "moderateStockMax", "nearExpiryDays", "thresholdNotice", "updatedBy", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Authenticated user role and profile documents."
+    },
+    "/donors/{donorId}": {
+      "schema": { "$ref": "#/entities/Donor" },
+      "description": "Registered blood donor directory containing protected PII."
+    },
+    "/blood_inventory/{inventoryId}": {
+      "schema": { "$ref": "#/entities/BloodInventoryBatch" },
+      "description": "Blood stock batches across all 8 blood groups."
+    },
+    "/blood_transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/BloodTransaction" },
+      "description": "Append-only stock transaction audit ledger."
+    },
+    "/blood_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/BloodRequest" },
+      "description": "Hospital and clinical blood unit requests."
+    },
+    "/donations/{donationId}": {
+      "schema": { "$ref": "#/entities/Donation" },
+      "description": "Recorded blood donation events linked to donors and inventory batches."
+    },
+    "/ai_reports/{reportId}": {
+      "schema": { "$ref": "#/entities/AiReport" },
+      "description": "Persisted Gemini AI inventory analysis reports."
+    },
+    "/activity_logs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "System-wide administrative and operational audit logs."
+    },
+    "/system_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/SystemSettings" },
+      "description": "Illustrative threshold and operational configuration."
+    }
+  }
+}

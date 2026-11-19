@@ -1,0 +1,353 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidBloodGroup(bg) {
+      return bg is string && bg in ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+    }
+
+    function isValidComponent(comp) {
+      return comp is string && comp in ['Whole Blood', 'Red Blood Cells', 'Platelets', 'Fresh Frozen Plasma', 'Cryoprecipitate'];
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() &&
+        request.auth.token.email_verified == true &&
+        request.auth.token.email == 'liikhithaa13@gmail.com';
+    }
+
+    function isActiveUser() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'active';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isActiveUser() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    function isAuthorizedUser() {
+      return isBootstrappedAdmin() || isActiveUser();
+    }
+
+    // --- Validation Blueprints ---
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'status', 'department', 'phone', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'status', 'department', 'phone', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 100
+        && data.role in ['admin', 'staff']
+        && data.status in ['active', 'pending', 'disabled']
+        && data.department is string && data.department.size() >= 1 && data.department.size() <= 80
+        && data.phone is string && data.phone.size() <= 30
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDonor(data) {
+      return data.keys().hasAll(['donorCode', 'fullName', 'contactNumber', 'email', 'age', 'bloodGroup', 'address', 'lastDonationDate', 'availabilityStatus', 'registrationDate', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['donorCode', 'fullName', 'contactNumber', 'email', 'age', 'bloodGroup', 'address', 'lastDonationDate', 'availabilityStatus', 'registrationDate', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.donorCode is string && data.donorCode.size() >= 3 && data.donorCode.size() <= 32 && data.donorCode.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 100
+        && data.contactNumber is string && data.contactNumber.size() >= 7 && data.contactNumber.size() <= 25
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.age is int && data.age >= 18 && data.age <= 65
+        && isValidBloodGroup(data.bloodGroup)
+        && data.address is string && data.address.size() >= 3 && data.address.size() <= 300
+        && data.lastDonationDate is string && data.lastDonationDate.size() <= 20
+        && data.availabilityStatus in ['available', 'deferred', 'inactive']
+        && data.registrationDate is string && data.registrationDate.size() >= 8 && data.registrationDate.size() <= 20
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidBloodInventoryBatch(data) {
+      return data.keys().hasAll(['batchCode', 'bloodGroup', 'component', 'unitsAvailable', 'initialUnits', 'collectionDate', 'expiryDate', 'storageLocation', 'status', 'quarantineReason', 'donorId', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['batchCode', 'bloodGroup', 'component', 'unitsAvailable', 'initialUnits', 'collectionDate', 'expiryDate', 'storageLocation', 'status', 'quarantineReason', 'donorId', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.batchCode is string && data.batchCode.size() >= 3 && data.batchCode.size() <= 40 && data.batchCode.matches('^[a-zA-Z0-9_\\-]+$')
+        && isValidBloodGroup(data.bloodGroup)
+        && isValidComponent(data.component)
+        && data.unitsAvailable is int && data.unitsAvailable >= 0 && data.unitsAvailable <= 10000
+        && data.initialUnits is int && data.initialUnits >= 1 && data.initialUnits <= 10000
+        && data.unitsAvailable <= data.initialUnits
+        && data.collectionDate is string && data.collectionDate.size() >= 8 && data.collectionDate.size() <= 20
+        && data.expiryDate is string && data.expiryDate.size() >= 8 && data.expiryDate.size() <= 20
+        && data.storageLocation is string && data.storageLocation.size() >= 2 && data.storageLocation.size() <= 80
+        && data.status in ['available', 'quarantined', 'expired', 'depleted']
+        && data.quarantineReason is string && data.quarantineReason.size() <= 240
+        && data.donorId is string && data.donorId.size() <= 128
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidBloodTransaction(data) {
+      return data.keys().hasAll(['transactionType', 'bloodGroup', 'component', 'unitsDelta', 'unitsAfter', 'inventoryBatchId', 'referenceType', 'referenceId', 'notes', 'performedBy', 'performedByName', 'createdAt'])
+        && data.keys().hasOnly(['transactionType', 'bloodGroup', 'component', 'unitsDelta', 'unitsAfter', 'inventoryBatchId', 'referenceType', 'referenceId', 'notes', 'performedBy', 'performedByName', 'createdAt'])
+        && data.transactionType in ['addition', 'usage', 'quarantine', 'expiry_writeoff', 'adjustment']
+        && isValidBloodGroup(data.bloodGroup)
+        && isValidComponent(data.component)
+        && data.unitsDelta is int && data.unitsDelta >= -1000 && data.unitsDelta <= 1000
+        && data.unitsAfter is int && data.unitsAfter >= 0 && data.unitsAfter <= 10000
+        && isValidId(data.inventoryBatchId)
+        && data.referenceType in ['donation', 'request', 'manual', 'quarantine']
+        && data.referenceId is string && data.referenceId.size() <= 128
+        && data.notes is string && data.notes.size() <= 400
+        && isValidId(data.performedBy)
+        && data.performedByName is string && data.performedByName.size() >= 2 && data.performedByName.size() <= 100
+        && data.createdAt is timestamp;
+    }
+
+    function isValidBloodRequest(data) {
+      return data.keys().hasAll(['requestCode', 'hospitalOrRequesterName', 'requiredBloodGroup', 'component', 'unitsRequested', 'urgency', 'requestDate', 'requiredDate', 'status', 'notes', 'createdBy', 'reviewedBy', 'reviewedByName', 'fulfilledAt', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['requestCode', 'hospitalOrRequesterName', 'requiredBloodGroup', 'component', 'unitsRequested', 'urgency', 'requestDate', 'requiredDate', 'status', 'notes', 'createdBy', 'reviewedBy', 'reviewedByName', 'fulfilledAt', 'createdAt', 'updatedAt'])
+        && data.requestCode is string && data.requestCode.size() >= 3 && data.requestCode.size() <= 32 && data.requestCode.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.hospitalOrRequesterName is string && data.hospitalOrRequesterName.size() >= 2 && data.hospitalOrRequesterName.size() <= 140
+        && isValidBloodGroup(data.requiredBloodGroup)
+        && isValidComponent(data.component)
+        && data.unitsRequested is int && data.unitsRequested >= 1 && data.unitsRequested <= 100
+        && data.urgency in ['routine', 'urgent', 'emergency']
+        && data.requestDate is string && data.requestDate.size() >= 8 && data.requestDate.size() <= 20
+        && data.requiredDate is string && data.requiredDate.size() >= 8 && data.requiredDate.size() <= 20
+        && data.status in ['pending', 'approved', 'rejected', 'fulfilled']
+        && data.notes is string && data.notes.size() <= 500
+        && isValidId(data.createdBy)
+        && data.reviewedBy is string && data.reviewedBy.size() <= 128
+        && data.reviewedByName is string && data.reviewedByName.size() <= 100
+        && data.fulfilledAt is string && data.fulfilledAt.size() <= 40
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDonation(data) {
+      return data.keys().hasAll(['donationCode', 'donorId', 'donorCode', 'donorName', 'bloodGroup', 'component', 'donationDate', 'unitsCollected', 'inventoryBatchId', 'notes', 'recordedBy', 'createdAt'])
+        && data.keys().hasOnly(['donationCode', 'donorId', 'donorCode', 'donorName', 'bloodGroup', 'component', 'donationDate', 'unitsCollected', 'inventoryBatchId', 'notes', 'recordedBy', 'createdAt'])
+        && data.donationCode is string && data.donationCode.size() >= 3 && data.donationCode.size() <= 32 && data.donationCode.matches('^[a-zA-Z0-9_\\-]+$')
+        && isValidId(data.donorId)
+        && data.donorCode is string && data.donorCode.size() >= 3 && data.donorCode.size() <= 32
+        && data.donorName is string && data.donorName.size() >= 2 && data.donorName.size() <= 100
+        && isValidBloodGroup(data.bloodGroup)
+        && isValidComponent(data.component)
+        && data.donationDate is string && data.donationDate.size() >= 8 && data.donationDate.size() <= 20
+        && data.unitsCollected is int && data.unitsCollected >= 1 && data.unitsCollected <= 5
+        && isValidId(data.inventoryBatchId)
+        && data.notes is string && data.notes.size() <= 400
+        && isValidId(data.recordedBy)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidAiReport(data) {
+      return data.keys().hasAll(['title', 'reportType', 'totalAvailableUnits', 'nearExpiryUnits', 'expiredUnits', 'quarantinedUnits', 'lowStockGroups', 'summaryText', 'recommendations', 'safetyDisclaimer', 'lowStockMaxThreshold', 'moderateStockMaxThreshold', 'generatedBy', 'generatedByName', 'createdAt'])
+        && data.keys().hasOnly(['title', 'reportType', 'totalAvailableUnits', 'nearExpiryUnits', 'expiredUnits', 'quarantinedUnits', 'lowStockGroups', 'summaryText', 'recommendations', 'safetyDisclaimer', 'lowStockMaxThreshold', 'moderateStockMaxThreshold', 'generatedBy', 'generatedByName', 'createdAt'])
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 160
+        && data.reportType in ['inventory_analysis', 'full_report', 'recruitment_plan']
+        && data.totalAvailableUnits is int && data.totalAvailableUnits >= 0
+        && data.nearExpiryUnits is int && data.nearExpiryUnits >= 0
+        && data.expiredUnits is int && data.expiredUnits >= 0
+        && data.quarantinedUnits is int && data.quarantinedUnits >= 0
+        && data.lowStockGroups is list && data.lowStockGroups.size() <= 8
+        && (data.lowStockGroups.size() == 0 || data.lowStockGroups[0] is string)
+        && data.summaryText is string && data.summaryText.size() >= 10 && data.summaryText.size() <= 12000
+        && data.recommendations is list && data.recommendations.size() <= 20
+        && (data.recommendations.size() == 0 || data.recommendations[0] is string)
+        && data.safetyDisclaimer is string && data.safetyDisclaimer.size() >= 10 && data.safetyDisclaimer.size() <= 300
+        && data.lowStockMaxThreshold is int && data.lowStockMaxThreshold >= 0 && data.lowStockMaxThreshold <= 100
+        && data.moderateStockMaxThreshold is int && data.moderateStockMaxThreshold >= 1 && data.moderateStockMaxThreshold <= 500
+        && isValidId(data.generatedBy)
+        && data.generatedByName is string && data.generatedByName.size() >= 2 && data.generatedByName.size() <= 100
+        && data.createdAt is timestamp;
+    }
+
+    function isValidActivityLog(data) {
+      return data.keys().hasAll(['action', 'category', 'description', 'entityId', 'actorUid', 'actorName', 'actorRole', 'createdAt'])
+        && data.keys().hasOnly(['action', 'category', 'description', 'entityId', 'actorUid', 'actorName', 'actorRole', 'createdAt'])
+        && data.action is string && data.action.size() >= 2 && data.action.size() <= 80
+        && data.category in ['auth', 'donor', 'inventory', 'request', 'donation', 'ai', 'settings', 'users']
+        && data.description is string && data.description.size() >= 3 && data.description.size() <= 400
+        && data.entityId is string && data.entityId.size() <= 128
+        && isValidId(data.actorUid)
+        && data.actorName is string && data.actorName.size() >= 2 && data.actorName.size() <= 100
+        && data.actorRole in ['admin', 'staff']
+        && data.createdAt is timestamp;
+    }
+
+    function isValidSystemSettings(data) {
+      return data.keys().hasAll(['lowStockMax', 'moderateStockMax', 'nearExpiryDays', 'thresholdNotice', 'updatedBy', 'updatedAt'])
+        && data.keys().hasOnly(['lowStockMax', 'moderateStockMax', 'nearExpiryDays', 'thresholdNotice', 'updatedBy', 'updatedAt'])
+        && data.lowStockMax is int && data.lowStockMax >= 1 && data.lowStockMax <= 100
+        && data.moderateStockMax is int && data.moderateStockMax > data.lowStockMax && data.moderateStockMax <= 500
+        && data.nearExpiryDays is int && data.nearExpiryDays >= 1 && data.nearExpiryDays <= 60
+        && data.thresholdNotice is string && data.thresholdNotice.size() >= 10 && data.thresholdNotice.size() <= 300
+        && isValidId(data.updatedBy)
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isSignedIn() && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId) && isSignedIn() && isValidUserProfile(incoming())
+        && incoming().uid == userId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          (isBootstrappedAdmin() && isOwner(userId) && incoming().role == 'admin' && incoming().status == 'active') ||
+          (isOwner(userId) && incoming().role == 'staff' && incoming().status == 'active') ||
+          isAdmin()
+        );
+      allow update: if isValidId(userId) && isSignedIn() && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (isOwner(userId) && incoming().role == existing().role && incoming().status == 'active' && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'department', 'phone', 'status', 'updatedAt'])) ||
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'department', 'phone', 'role', 'status', 'updatedAt']))
+        );
+      allow delete: if isValidId(userId) && isAdmin() && userId != request.auth.uid;
+    }
+
+    match /donors/{donorId} {
+      allow get: if isValidId(donorId) && isAuthorizedUser();
+      allow list: if isAuthorizedUser();
+      allow create: if isValidId(donorId) && isAuthorizedUser() && isValidDonor(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(donorId) && isAuthorizedUser() && isValidDonor(incoming())
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'donorCode', 'fullName', 'contactNumber', 'email', 'age', 'bloodGroup', 'address', 'lastDonationDate', 'availabilityStatus', 'updatedAt'
+        ]);
+      allow delete: if isValidId(donorId) && isAuthorizedUser();
+    }
+
+    match /blood_inventory/{inventoryId} {
+      allow get: if isValidId(inventoryId) && isAuthorizedUser();
+      allow list: if isAuthorizedUser();
+      allow create: if isValidId(inventoryId) && isAuthorizedUser() && isValidBloodInventoryBatch(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(inventoryId) && isAuthorizedUser() && isValidBloodInventoryBatch(incoming())
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'unitsAvailable', 'initialUnits', 'status', 'quarantineReason', 'storageLocation', 'updatedAt'
+        ]);
+      allow delete: if isValidId(inventoryId) && isAuthorizedUser();
+    }
+
+    match /blood_transactions/{transactionId} {
+      allow get: if isValidId(transactionId) && isAuthorizedUser();
+      allow list: if isAuthorizedUser();
+      allow create: if isValidId(transactionId) && isAuthorizedUser() && isValidBloodTransaction(incoming())
+        && incoming().performedBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/blood_inventory/$(incoming().inventoryBatchId));
+      allow update, delete: if false;
+    }
+
+    match /blood_requests/{requestId} {
+      allow get: if isValidId(requestId) && isAuthorizedUser();
+      allow list: if isAuthorizedUser();
+      allow create: if isValidId(requestId) && isAuthorizedUser() && isValidBloodRequest(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().status == 'pending'
+        && incoming().reviewedBy == ''
+        && incoming().fulfilledAt == ''
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(requestId) && isAuthorizedUser() && isValidBloodRequest(incoming())
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (existing().status == 'pending' && incoming().status in ['pending', 'approved', 'rejected']) ||
+          (existing().status == 'approved' && incoming().status in ['approved', 'fulfilled', 'rejected'])
+        )
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'status', 'notes', 'reviewedBy', 'reviewedByName', 'fulfilledAt', 'updatedAt'
+        ]);
+      allow delete: if isValidId(requestId) && isAuthorizedUser();
+    }
+
+    match /donations/{donationId} {
+      allow get: if isValidId(donationId) && isAuthorizedUser();
+      allow list: if isAuthorizedUser();
+      allow create: if isValidId(donationId) && isAuthorizedUser() && isValidDonation(incoming())
+        && incoming().recordedBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/donors/$(incoming().donorId))
+        && existsAfter(/databases/$(database)/documents/blood_inventory/$(incoming().inventoryBatchId));
+      allow update: if isValidId(donationId) && isAuthorizedUser() && isValidDonation(incoming())
+        && incoming().recordedBy == existing().recordedBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['notes']);
+      allow delete: if false;
+    }
+
+    match /ai_reports/{reportId} {
+      allow get: if isValidId(reportId) && isAuthorizedUser();
+      allow list: if isAuthorizedUser();
+      allow create: if isValidId(reportId) && isAuthorizedUser() && isValidAiReport(incoming())
+        && incoming().generatedBy == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(reportId) && isAuthorizedUser();
+    }
+
+    match /activity_logs/{logId} {
+      allow get: if isValidId(logId) && isAuthorizedUser();
+      allow list: if isAuthorizedUser();
+      allow create: if isValidId(logId) && isSignedIn() && isValidActivityLog(incoming())
+        && incoming().actorUid == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /system_settings/{settingId} {
+      allow get: if isValidId(settingId) && isAuthorizedUser();
+      allow list: if isAuthorizedUser();
+      allow create, update: if isValidId(settingId) && isAuthorizedUser() && isValidSystemSettings(incoming())
+        && incoming().updatedBy == request.auth.uid
+        && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+  }
+}
